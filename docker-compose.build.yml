@@ -11,7 +11,7 @@ services:
   # Rust Services
   ########################################################################
 
-sysmon-generator:
+  sysmon-generator:
     image: ${REGISTRY:-grapl}/sysmon-generator:${TAG:-latest}
     build:
       context: src
