@@ -5,6 +5,9 @@ from typing_extensions import Final
 
 import pulumi
 
+# TODO: Find a way to lazily instantiate these policies; we only need
+# to create them if we need them.
+
 SSM_POLICY: Final[aws.iam.Policy] = aws.iam.Policy(
     "demanaged-AmazonSSMManagedInstanceCore",
     policy=json.dumps(
@@ -54,6 +57,26 @@ SSM_POLICY: Final[aws.iam.Policy] = aws.iam.Policy(
                     ],
                     "Resource": "*",
                 },
+            ],
+        }
+    ),
+)
+
+EC2_DESCRIBE_INSTANCES_POLICY: Final[aws.iam.Policy] = aws.iam.Policy(
+    "ec2-DescribeInstances",
+    policy=json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "ec2:DescribeTags",
+                        "ec2:DescribeInstances",
+                        "autoscaling:DescribeAutoScalingGroups",
+                    ],
+                    "Resource": "*",
+                }
             ],
         }
     ),

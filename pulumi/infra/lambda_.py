@@ -1,6 +1,7 @@
 import json
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Mapping, Optional, Union
 
 import pulumi_aws as aws
@@ -32,7 +33,12 @@ class LambdaResolver:
         environment variable to an appropriate directory.
         """
         root_dir = os.getenv("GRAPL_LAMBDA_ZIP_DIR", repository_path("dist"))
-        return f"{root_dir}/{lambda_fn}-lambda.zip"
+        path = f"{root_dir}/{lambda_fn}-lambda.zip"
+        if not Path(path).resolve().exists():
+            raise Exception(
+                f"Couldn't find lambda zip for {lambda_fn} - consider a `make pulumi-prep`."
+            )
+        return path
 
     @staticmethod
     def _cloudsmith_url(lambda_fn: str, version: str, repository: str) -> str:
@@ -155,6 +161,11 @@ class Lambda(pulumi.ComponentResource):
         override_name: Optional[str] = None,
         opts: Optional[pulumi.ResourceOptions] = None,
     ) -> None:
+        """
+        `override_name` is only needed for cases where we call a lambda with a
+            specific name - right now, this is primarily just graplctl calling
+            provisioner or e2e-test-runner
+        """
         super().__init__("grapl:Lambda", name, None, opts)
 
         # Our previous usage of CDK was such that we automatically
@@ -167,10 +178,11 @@ class Lambda(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
-        lambda_name = f"{DEPLOYMENT_NAME}-{name}"
         self.function = aws.lambda_.Function(
-            f"{name}-lambda",
-            name=override_name or name,
+            # Normally we wouldn't include DEPLOYMENT_NAME in the resource name,
+            # but it's beneficial for finding your lambda in the AWS console.
+            f"{DEPLOYMENT_NAME}-{name}-lambda",
+            name=override_name or None,  # None means "let Pulumi autoassign one"
             description=args.description,
             runtime=args.runtime,
             package_type=args.package_type,
@@ -211,7 +223,9 @@ class Lambda(pulumi.ComponentResource):
             # Don't change - or rather, if you decide to,
             # follow these instructions:
             # https://www.pulumi.com/docs/reference/pkg/aws/lambda/function/#cloudwatch-logging-and-permissions
-            name=f"/aws/lambda/{lambda_name}",
+            name=pulumi.Output.apply(
+                self.function.name, lambda func_name: f"/aws/lambda/{func_name}"
+            ),
             retention_in_days=SERVICE_LOG_RETENTION_DAYS,
             opts=pulumi.ResourceOptions(parent=self),
         )

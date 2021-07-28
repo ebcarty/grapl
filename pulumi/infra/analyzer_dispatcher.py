@@ -25,13 +25,12 @@ class AnalyzerDispatcher(FargateService):
                 target="analyzer-dispatcher-deploy",
                 context=str(repository_path("src")),
             ),
-            command="/analyzer-dispatcher",
             env={
                 **configurable_envvars(
                     "analyzer-dispatcher", ["RUST_LOG", "RUST_BACKTRACE"]
                 ),
                 "REDIS_ENDPOINT": cache.endpoint,
-                "ANALYZER_BUCKET": analyzers_bucket.bucket,
+                "GRAPL_ANALYZERS_BUCKET": analyzers_bucket.bucket,
             },
             input_emitter=input_emitter,
             output_emitter=output_emitter,

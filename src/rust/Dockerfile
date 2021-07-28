@@ -113,7 +113,11 @@ RUN mkdir -p /grapl/zips; \
 # More information about the base image used here can be found at: 
 # https://github.com/GoogleContainerTools/distroless/blob/main/cc/README.md.
 # For debugging see: https://github.com/GoogleContainerTools/distroless#debug-images
-FROM gcr.io/distroless/cc AS rust-dist
+
+# NOTE: we're using the debug containers at the moment so we have a
+# shell; this lets us inject our Pulumi outputs in Local Grapl. If
+# not for that, we could use the standard non-debug images.
+FROM gcr.io/distroless/cc:debug AS rust-dist
 
 USER nonroot
 
@@ -121,40 +125,40 @@ USER nonroot
 FROM rust-dist AS analyzer-dispatcher-deploy
 
 COPY --from=build /dist/analyzer-dispatcher /
-CMD ["/analyzer-dispatcher"]
+ENTRYPOINT ["/analyzer-dispatcher"]
 
 # generic-subgraph-generator
 FROM rust-dist AS generic-subgraph-generator-deploy
 
 COPY --from=build /dist/generic-subgraph-generator /
-CMD ["/generic-subgraph-generator"]
+ENTRYPOINT ["/generic-subgraph-generator"]
 
 # graph-merger
 FROM rust-dist AS graph-merger-deploy
 
 COPY --from=build /dist/graph-merger /
-CMD ["/graph-merger"]
+ENTRYPOINT ["/graph-merger"]
 
 # node-identifier
 FROM rust-dist AS node-identifier-deploy
 
 COPY --from=build /dist/node-identifier /
-CMD ["/node-identifier"]
+ENTRYPOINT ["/node-identifier"]
 
 # node-identifier-retry
 FROM rust-dist AS node-identifier-retry-deploy
 
 COPY --from=build /dist/node-identifier-retry /
-CMD ["/node-identifier-retry"]
+ENTRYPOINT ["/node-identifier-retry"]
 
-# sysmon-subgraph-generator
-FROM rust-dist AS sysmon-subgraph-generator-deploy
+# sysmon-generator
+FROM rust-dist AS sysmon-generator-deploy
 
-COPY --from=build /dist/sysmon-subgraph-generator /
-CMD ["/sysmon-subgraph-generator"]
+COPY --from=build /dist/sysmon-generator /
+ENTRYPOINT ["/sysmon-generator"]
 
-# osquery-subgraph-generator
-FROM rust-dist AS osquery-subgraph-generator-deploy
+# osquery-generator
+FROM rust-dist AS osquery-generator-deploy
 
-COPY --from=build /dist/osquery-subgraph-generator /
-CMD ["/osquery-subgraph-generator"]
+COPY --from=build /dist/osquery-generator /
+ENTRYPOINT ["/osquery-generator"]

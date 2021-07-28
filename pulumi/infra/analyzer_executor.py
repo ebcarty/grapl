@@ -24,13 +24,16 @@ class AnalyzerExecutor(FargateService):
         super().__init__(
             "analyzer-executor",
             image=GraplDockerBuild(
+                # Should match entry in `docker-compose.build.yml`
                 dockerfile=str(repository_path("src/python/Dockerfile")),
                 target="analyzer-executor-deploy",
-                context=str(repository_path("src")),
+                context=str(repository_path(".")),
             ),
             env={
                 **configurable_envvars("analyzer-executor", ["GRAPL_LOG_LEVEL"]),
-                "ANALYZER_MATCH_BUCKET": analyzers_bucket.bucket,
+                "GRAPL_ANALYZERS_BUCKET": analyzers_bucket.bucket,
+                "GRAPL_MODEL_PLUGINS_BUCKET": model_plugins_bucket.bucket,
+                "GRAPL_ANALYZER_MATCHED_SUBGRAPHS_BUCKET": output_emitter.bucket.bucket,
                 "MG_ALPHAS": dgraph_cluster.alpha_host_port,
                 # TODO: We should modify this to use REDIS_ENDPOINT,
                 # like our other services.

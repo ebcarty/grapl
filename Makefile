@@ -176,6 +176,24 @@ graplctl: ## Build graplctl and install it to the project root
 build-ux: ## Build website assets
 	cd src/js/engagement_view && yarn install && yarn build
 
+# Create the dist directory if necessary; don't need to document this
+# formally for `make help`, though.
+dist:
+	mkdir dist
+
+# This is used to create the artifact that will be uploaded to our
+# artifact repository in CI, and will be the artifact that is used by
+# our Pulumi deployments.
+.PHONY: ux-tarball
+ux-tarball: build-ux dist ## Build website asset tarball
+	tar \
+		--create \
+		--gzip \
+		--verbose \
+		--file="dist/grapl-ux.tar.gz" \
+		--directory=src/js/engagement_view/build \
+		.
+
 .PHONY: lambdas
 lambdas: lambdas-rust lambdas-js lambdas-python ## Generate all lambda zip files
 
@@ -201,7 +219,7 @@ test: test-unit test-integration test-e2e test-typecheck ## Run all tests
 .PHONY: test-unit
 test-unit: export COMPOSE_PROJECT_NAME := grapl-test-unit
 test-unit: export COMPOSE_FILE := ./test/docker-compose.unit-tests-rust.yml:./test/docker-compose.unit-tests-js.yml
-test-unit: build-test-unit test-unit-python ## Build and run unit tests
+test-unit: build-test-unit test-unit-python test-unit-shell ## Build and run unit tests
 	test/docker-compose-with-error.sh
 
 .PHONY: test-unit-rust
@@ -213,10 +231,16 @@ test-unit-rust: build-test-unit-rust ## Build and run unit tests - Rust only
 .PHONY: test-unit-python
 # Long term, it would be nice to organize the tests with Pants
 # tags, rather than pytest tags
-# If you need to `pdb` these tests, add a `--debug` between `test` and `::`
+# If you need to `pdb` these tests, add a `--debug` after `./pants test`
 test-unit-python: ## Run Python unit tests under Pants
-	./pants --tag="-needs_work" test :: --pytest-args="-m \"not integration_test\""
-# TODO: split this up so it uses a `./pants filter` to choose python tests and shell tests respectively
+	./pants filter --filter-target-type="python_tests" :: \
+	| xargs ./pants --tag="-needs_work" test --pytest-args="-m \"not integration_test\""
+
+
+.PHONY: test-unit-shell
+test-unit-shell: ## Run shunit2 tests under Pants
+	./pants filter --filter-target-type="shunit2_tests" :: \
+	| xargs ./pants test
 
 .PHONY: test-unit-js
 test-unit-js: export COMPOSE_PROJECT_NAME := grapl-test-unit-js
@@ -290,7 +314,10 @@ lint-shell: ## Run Shell lint checks
 
 .PHONY: lint-prettier
 lint-prettier: build-formatter ## Run ts/js/yaml lint checks
-	docker-compose -f docker-compose.formatter.yml up lint-prettier
+	# `docker-compose run` will also propagate the correct exit code.
+	# We could explore tossing `docker-compose` and switching to `docker run`,
+	# like `grapl/grapl-rfcs`.
+	docker-compose -f docker-compose.formatter.yml run lint-prettier
 
 .PHONY: lint-packer
 lint-packer: ## Check to see if Packer templates are formatted properly
@@ -311,7 +338,8 @@ format-python: ## Reformat all Python code
 
 .PHONY: format-prettier
 format-prettier: build-formatter ## Reformat js/ts/yaml
-	docker-compose -f docker-compose.formatter.yml up format-prettier
+	# `docker-compose run` will also propagate the correct exit code.
+	docker-compose -f docker-compose.formatter.yml run format-prettier
 
 .PHONY: format-packer
 format-packer: ## Reformat all Packer HCLs
@@ -344,7 +372,7 @@ up-detach: build-services ## Bring up local Grapl and detach to return control t
 	unset COMPOSE_FILE
 	docker-compose \
 		--file docker-compose.yml \
-		up --detach --force-recreate --always-recreate-deps
+		up --detach --force-recreate --always-recreate-deps --renew-anon-volumes
 
 .PHONY: down
 down: ## docker-compose down - both stops and removes the containers
@@ -409,6 +437,6 @@ repl: ## Run an interactive ipython repl that can import from grapl-common etc
 .PHONY: pulumi-prep
 pulumi-prep: graplctl lambdas build-ux ## Prepare some artifacts in advance of running a Pulumi update (does not run Pulumi!)
 
-.PHONY: update-shared
+.PHONY: update-buildkite-shared
 update-buildkite-shared: ## Pull in changes from grapl-security/buildkite-common
 	git subtree pull --prefix .buildkite/shared git@github.com:grapl-security/buildkite-common.git main --squash
