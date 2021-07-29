@@ -19,9 +19,8 @@ class EventEmitter(pulumi.ComponentResource):
 
         super().__init__("grapl:EventEmitter", event_name, None, opts)
 
-        logical_bucket_name = f"{event_name}-bucket"
         self.bucket = Bucket(
-            logical_bucket_name, sse=True, opts=pulumi.ResourceOptions(parent=self)
+            f"{event_name}-bucket", sse=True, opts=pulumi.ResourceOptions(parent=self)
         )
 
         physical_topic_name = f"{DEPLOYMENT_NAME}-{event_name}-topic"
@@ -64,7 +63,7 @@ class EventEmitter(pulumi.ComponentResource):
         )
 
         self.bucket_notification = aws.s3.BucketNotification(
-            f"{logical_bucket_name}-notifies-topic",
+            f"{self.bucket._name}-notifies-topic",
             bucket=self.bucket.id,
             topics=[
                 aws.s3.BucketNotificationTopicArgs(
