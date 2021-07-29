@@ -9,6 +9,7 @@ TAG ?= latest
 RUST_BUILD ?= debug
 UID = $(shell id -u)
 GID = $(shell id -g)
+PWD = $(shell pwd)
 DOCKER_BUILDX_BAKE_OPTS ?=
 ifneq ($(GRAPL_RUST_ENV_FILE),)
 DOCKER_BUILDX_BAKE_OPTS += --set *.secrets=id=rust_env,src="$(GRAPL_RUST_ENV_FILE)"
@@ -17,17 +18,13 @@ COMPOSE_IGNORE_ORPHANS=1
 COMPOSE_PROJECT_NAME ?= grapl
 export
 
-export EVERY_LAMBDA_COMPOSE_FILE=--file docker-compose.lambda-zips.js.yml \
-	--file docker-compose.lambda-zips.rust.yml
-
 export EVERY_COMPOSE_FILE=--file docker-compose.yml \
 	--file ./test/docker-compose.unit-tests-rust.yml \
 	--file ./test/docker-compose.unit-tests-js.yml \
 	--file ./test/docker-compose.integration-tests.yml \
 	--file ./test/docker-compose.e2e-tests.yml \
 	--file ./test/docker-compose.typecheck-tests.yml \
-        --file ./test/docker-compose.graplctl.yml \
-	${EVERY_LAMBDA_COMPOSE_FILE}
+        --file ./test/docker-compose.graplctl.yml
 
 DOCKER_BUILDX_BAKE := docker buildx bake $(DOCKER_BUILDX_BAKE_OPTS)
 
@@ -156,9 +153,22 @@ build-test-e2e: build-services
 build-python-wheels:  ## Build all Python wheels
 	./pants filter --target-type=python_distribution :: | xargs ./pants package
 
-.PHONY: build-services
-build-services: graplctl lambdas build-python-wheels ## Build Grapl services
+.PHONY: build-python-lambda-zips
+build-python-lambda-zips:
+	./pants filter --target-type=python_awslambda :: | xargs ./pants package
+
+.PHONY: build-python-pants
+build-python-pants: build-python-wheels build-python-lambda-zips
+
+# At the time of this writing there are services defined in this build spec
+# for this target that depend on created by the 'build-python-zips' target.
+# This inlcudes graplctl and dist/provsioner.zip
+.PHONY: build-docker-services
+build-docker-services: build-python-pants
 	$(DOCKER_BUILDX_BAKE) --file docker-compose.build.yml
+
+.PHONY: build-services
+build-services: graplctl build-python-pants build-docker-services extract-lambda-zips ## Build Grapl services
 
 .PHONY: build-formatter
 build-formatter:
@@ -194,22 +204,26 @@ ux-tarball: build-ux dist ## Build website asset tarball
 		--directory=src/js/engagement_view/build \
 		.
 
-.PHONY: lambdas
-lambdas: lambdas-rust lambdas-js lambdas-python ## Generate all lambda zip files
+.PHONY: extract-lambda-zips
+extract-lambda-zips: extract-lambda-zips-js extract-lambda-zips-rust ## Extract zips from previously built Docker images for AWS Lambda
 
-.PHONY: lambdas-rust
-lambdas-rust: ## Build Rust lambda zips
-	$(DOCKER_BUILDX_BAKE) -f docker-compose.lambda-zips.rust.yml
-	docker-compose -f docker-compose.lambda-zips.rust.yml up
+.PHONY: extract-lambda-zips-rust
+extract-lambda-zips-rust: build-docker-services
+	docker run --rm \
+		--user "${UID}:${GID}" \
+		--volume "${PWD}/dist:/tmp/zips" \
+		--workdir /grapl/zips \
+		grapl/metric-forwarder-zip:${TAG} \
+		sh -c 'cp /grapl/zips/metric-forwarder.zip /tmp/zips/metric-forwarder-lambda.zip'
 
-.PHONY: lambdas-js
-lambdas-js: ## Build JS lambda zips
-	$(DOCKER_BUILDX_BAKE) -f docker-compose.lambda-zips.js.yml
-	docker-compose -f docker-compose.lambda-zips.js.yml up
-
-.PHONY: lambdas-python
-lambdas-python: ## Build Python lambda zips
-	./pants filter --target-type=python_awslambda :: | xargs ./pants package
+.PHONY: extract-lambda-zips-js
+extract-lambda-zips-js: build-docker-services
+	docker run --rm \
+		--user "${UID}:${GID}" \
+		--volume "${PWD}/dist:/grapl" \
+		--workdir /grapl \
+		grapl/graphql-endpoint-zip:${TAG} \
+		cp /home/grapl/lambda.zip graphql-endpoint-lambda.zip
 
 ##@ Test 🧪
 

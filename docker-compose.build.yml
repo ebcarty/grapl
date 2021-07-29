@@ -65,6 +65,15 @@ services:
       args:
         - RUST_BUILD=${RUST_BUILD:-debug}
 
+  metric-forwarder:
+    image: grapl/metric-forwarder-zip:${TAG:-latest}
+    build:
+      context: src
+      dockerfile: rust/Dockerfile
+      target: metric-forwarder-zip
+      args:
+        - RUST_BUILD=${RUST_BUILD:-debug}
+
   ########################################################################
   # Python Services
   ########################################################################
@@ -107,6 +116,17 @@ services:
       context: src
       dockerfile: js/graphql_endpoint/Dockerfile
       target: graphql-endpoint-deploy
+
+  # This image will contain the zip that's used for running in AWS
+  # Lambda. If we can deploy this service as a container to AWS then
+  # we can probably converge this image and the graphql-endpoint image
+  # above.
+  graphql-endpoint-zip:
+    image: grapl/graphql-endpoint-zip:${TAG:-latest}
+    build:
+      context: src
+      dockerfile: js/graphql_endpoint/Dockerfile
+      target: graphql-endpoint-zip
 
   notebook:
     image: grapl/notebook:${TAG:-latest}

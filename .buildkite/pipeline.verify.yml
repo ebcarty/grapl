@@ -98,9 +98,9 @@ steps:
           # This container actually contains `make`, too!
           image: "node:16.5.0"
 
-  - label: ":aws-lambda::package: Create Lambda Zips"
+  - label: ":package: Build Grapl services"
     command:
-      - make lambdas
+      - make build-services
     agents:
       queue: "beefy"
 
