@@ -531,7 +531,9 @@ services:
           analyzer-matched-subgraphs-bucket
           analyzers-bucket
           model-plugins-bucket
+          osquery-log-bucket
           prod-api-id
+          sysmon-log-bucket
           ux-bucket
         )
         for output in "$${outputs[@]}"; do
